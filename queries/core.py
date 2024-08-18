@@ -2,6 +2,7 @@ from sqlalchemy import text, insert
 from database import sync_engine, async_engine
 from models import metadata_obj, workers_table
 import asyncio
+from models import Base
 
 # ----------------------------------------------------------------------------
 
@@ -13,8 +14,10 @@ import asyncio
 # создание таблиц в базе данных
 def create_tables():
     sync_engine.echo = False # выключить логи
-    metadata_obj.drop_all() # удалить все таблицы
-    metadata_obj.create_all() # создать все таблицы
+    # metadata_obj.drop_all() # удалить все таблицы
+    # metadata_obj.create_all() # создать все таблицы
+    Base.metadata.drop_all() # удалить все таблицы
+    Base.metadata.create_all() # создать все таблицы
     sync_engine.echo = True # включить логи
 
 # создание синхронной сессии с rollback для выполнения запросов к б.д.

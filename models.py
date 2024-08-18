@@ -1,5 +1,9 @@
-from sqlalchemy import Table, Column, Integer, String, MetaData
+import datetime
+from typing import Optional, Annotated
+
+from sqlalchemy import Table, Column, Integer, String, MetaData, ForeignKey, text, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from enum import Enum
 
 # -----------------------------------------------------------------------------
 
@@ -8,16 +12,26 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 # Integer - класс представляет тип поля integer
 # String - класс представляет тип поля string
 # MetaData - класс представляет собой метаданные для таблицы бд
-# Mapped - класс представляет собой преобразователь типа в тип sqlalchemy
+# Mapped - класс представляет собой преобразователь типа в тип sql
 # mapped_column - функция возвращает настройки для данного поля
+# Optional - указывает на то, что переменная может быть None
+# Enum - позволяет удобно работать с свойствами класса (получать имя переменной и значение свойства, итерироваться по ним)
+# ForeignKey - внешний ключ
+# func - это обьект, в котором функции sql
+# Annotated - указывает на тип и значение, которое будет у переменной
 
 # -------------------------------------------------------------------------------------
 
 # --------------------------------Декларативный стиль---------------------------------------
 
+intpk = Annotated[int, mapped_column(primary_key=True)]
+str_256 = Annotated[str, 256]
+
 class Base(DeclarativeBase):
     """Базовый класс для работы с ORM"""
-    pass
+    type_annotation_map = {
+        str_256: String(256)
+    } # создание кастомных форматов типа
 
 class WorkersOrm(Base):
     """Представляет модель таблицы базы данных"""
@@ -27,7 +41,31 @@ class WorkersOrm(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     username: Mapped[str]
 
+class Workload(Enum):
+    HELLO = 'hello'
+    BYE = 'bye'
 
+class ResumesOrm(Base):
+    """Представляет модель таблицы базы данных"""
+    # название таблицы
+    __tablename__ = "resumes"
+
+    id: Mapped[int] = mapped_column(primary_key=True) # поле уникального идентификатора
+    id_2: Mapped[intpk] # поле уникального идентификатора
+    title: Mapped[str_256] # поле с форматом типа str_256
+    compensation: Mapped[str] = mapped_column(nullable=True) # поле может быть null
+    compensation2: Mapped[str | None]  # поле может быть null
+    compensation3: Mapped[Optional[str]]  # поле может быть null
+    workload: Mapped[Workload] # поле может быть только из указанных в классе Workload
+    worker_id: Mapped[int] = mapped_column(ForeignKey("workers.id")) # указывает на внешний ключ
+    worker2_id: Mapped[int] = mapped_column(ForeignKey(WorkersOrm.id)) # указывает на внешний ключ
+    created_at: Mapped[datetime.datetime] = mapped_column(server_default=text("TIMEZONE('utc', now())")) # указать дату создания по умолчанию во временной зоне utc на стороне бд
+    created_at_2: Mapped[datetime.datetime] = mapped_column(server_default=func.now()) # указать дату создания по умолчанию во временной зоне utc на стороне бд
+    created_at_3: Mapped[datetime.datetime] = mapped_column(default=datetime.datetime.utcnow()) # указать дату создания по умолчанию во временной зоне utc на стороне приложения
+    updated_at: Mapped[datetime.datetime] = mapped_column(
+        default=datetime.datetime.utcnow(),
+        onupdate=datetime.datetime.utcnow
+    ) # указать дату обновления по умолчанию во временной зоне utc на стороне приложения
 
 
 # ----------------------------Императивный стиль------------------------------------------
