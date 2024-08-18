@@ -1,6 +1,16 @@
-from sqlalchemy import text, insert, select
+from sqlalchemy import text, insert, select, cast, func, Integer, and_
 from database import sync_engine, async_engine, sync_session_factory, async_session_factory
-from models import metadata_obj, WorkersOrm
+from models import metadata_obj, WorkersOrm, ResumesOrm
+
+# ---------------------------------------------------
+
+# cast - приводит к указанному типу
+# func - обьект, в котором хранятся функции sql
+# func.avg(<столбец>) - взять среднее значение
+# Integer - тип данных sql (int)
+# and_() - функция оператора "и"
+
+# ----------------------------------------------------
 
 # создание таблиц в базе данных
 def create_tables():
@@ -33,6 +43,34 @@ class ORMQuery:
             # workers = result.one_or_none() # получение 0-1 запись (если больше, то ошибка)
             # workers = result.scalars().all() # получение всех записей только первого столбца
             print(workers)
+
+    @staticmethod
+    def select_data_new(like_language: str = 'rus'):
+        """Получение отфильрованных записей в бд
+
+        SELECT workload, avg(compensation)::int as avg_compensation
+        FROM resumes
+        WHERE title like '%Python%' and compensation > 40000
+        group by workload
+        """
+        with sync_session_factory() as sync_engine:
+            query = (
+                select(
+                    ResumesOrm.workload, # получаем все записи из колонки title
+                    cast(func.avg(ResumesOrm.compensation), Integer).label('avg_compensation'), # получаем средние значения из колонки title, приводим к int и называем "avg_title"
+                )
+                .select_from(ResumesOrm) # указываем с какой таблицы берем данные
+                .filter(and_(
+                    ResumesOrm.title.contains(like_language), # фильтруем по полю title, чтобы like_language был в title
+                    ResumesOrm.compensation > 40000, # фильтруем по полю compensation > 40000
+                ))
+                .group_by(ResumesOrm.workload) # упорядочиваем по workload
+                .having(cast(func.avg(ResumesOrm.compensation), Integer) > 70000) # позволяет доп. отфильтровать готовый результат
+            )
+            print(query.compile(compile_kwargs={"literal_binds": True})) # вывести запросы в бд при включенном echo с парамметрами
+            res = sync_engine.execute(query) # выполни запрос
+            result = res.all() # покажи все записи
+            print(result)
 
     @staticmethod
     def select_data_one():
