@@ -1,5 +1,5 @@
 from sqlalchemy import text, insert, select, cast, func, Integer, and_
-from sqlalchemy.orm import aliased
+from sqlalchemy.orm import aliased, joinedload, selectinload, contains_eager
 
 from database import sync_engine, async_engine, sync_session_factory, async_session_factory
 from models import metadata_obj, WorkersOrm, ResumesOrm
@@ -12,6 +12,9 @@ from models import metadata_obj, WorkersOrm, ResumesOrm
 # Integer - тип данных sql (int)
 # and_() - функция оператора "и"
 # aliased - функция по созданию псевдонима для класса
+# joinedload - функция сразу подгружает в общий запрос нужную таблицу (делает JOIN, используется для o2m и o2o)
+# selectinload - функция сразу подгружает в общий запрос нужную таблицу (делает JOIN, используется для m2o и m2m)
+# contains_eager - не понял, но что-то как joinedload и selectinload
 
 # ----------------------------------------------------
 
@@ -150,3 +153,23 @@ class ORMQuery:
             res = session.execute(query)
             result = res.all()
             print(f'{result=}')
+
+    @staticmethod
+    def select_workers_with_lazy_relationship():
+        """Создаем запрос, используя relationship"""
+        with sync_session_factory() as session:
+            # создаем запрос с доп. подгрузкой табл. (используя relationship)
+            query = (
+                select(WorkersOrm)
+                # .options(selectinload(WorkersOrm.resumes))
+                # .options(contains_eager())
+                .options(joinedload(WorkersOrm.resumes)) # подгружаем доп. таблицу с помощью JOIN
+            )
+            res = session.execute(query)
+            result = res.scalars().all()
+
+            worker_1_resumes = result[0].resumes
+            print(worker_1_resumes)
+
+            worker_2_resumes = result[1].resumes
+            print(worker_2_resumes)

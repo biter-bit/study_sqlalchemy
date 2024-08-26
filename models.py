@@ -2,7 +2,7 @@ import datetime
 from typing import Optional, Annotated
 
 from sqlalchemy import Table, Column, Integer, String, MetaData, ForeignKey, text, func
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from enum import Enum
 
 # -----------------------------------------------------------------------------
@@ -33,6 +33,10 @@ class Base(DeclarativeBase):
         str_256: String(256)
     } # создание кастомных форматов типа
 
+    def __repr__(self):
+        """Используется для красивого вывода результата запроса"""
+        return 'Hello'
+
 class WorkersOrm(Base):
     """Представляет модель таблицы базы данных"""
     # название таблицы
@@ -40,6 +44,13 @@ class WorkersOrm(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     username: Mapped[str]
+
+    resumes: Mapped[list["ResumesOrm"]] = relationship(
+        back_populates="workers",
+        primaryjoin="and_(WorkersOrm.id == ResumesOrm.worker_id, ResumesOrm.workload == 'parttime')", # подгрузит только те записи, которые соблюдают условиям
+        order_by="ResumesOrm.id.desc()", # сортирует записи
+        lazy="selectin" # убрать ленивую подгрузку и добавить selectin
+    )
 
 class Workload(Enum):
     HELLO = 'hello'
@@ -67,6 +78,15 @@ class ResumesOrm(Base):
         onupdate=datetime.datetime.utcnow
     ) # указать дату обновления по умолчанию во временной зоне utc на стороне приложения
 
+    workers: Mapped["WorkersOrm"] = relationship(
+        back_populates="resumes", # уберает предупреждения sqlalchemy + убирает поле resumes из обьекта workers
+        # backref='resumes', # создает запись resumes для связанной таблицы (не нужно прописывать связь вручную)
+    )
+
+    # добавляем типы и формат полей
+    __table_args__ = (
+
+    )
 
 # ----------------------------Императивный стиль------------------------------------------
 
