@@ -1,4 +1,6 @@
 from sqlalchemy import text, insert, select, cast, func, Integer, and_
+from sqlalchemy.orm import aliased
+
 from database import sync_engine, async_engine, sync_session_factory, async_session_factory
 from models import metadata_obj, WorkersOrm, ResumesOrm
 
@@ -9,6 +11,7 @@ from models import metadata_obj, WorkersOrm, ResumesOrm
 # func.avg(<столбец>) - взять среднее значение
 # Integer - тип данных sql (int)
 # and_() - функция оператора "и"
+# aliased - функция по созданию псевдонима для класса
 
 # ----------------------------------------------------
 
@@ -91,3 +94,59 @@ class ORMQuery:
             sync_session.expire_all() # сброс всех изменений в сессии, запрос в базу не отправляет
             # sync_session.refresh(worker_jack) # сброс конкретной записи до значений как в бд
             sync_session.commit() # сохранение записи
+
+    @staticmethod
+    def join_cte_subquery_window_func(like_language: str = "Python"):
+        """
+        WITH helper2 AS (
+            SELECT *, compensation-avg_workload_compensation AS compensation_diff
+            FROM
+            (SELECT
+                w.id,
+                w.username,
+                r.compensation,
+                r.workload,
+                avg(r.compensation) OVER (PARTITION BY workload)::int AS avg_workload_compensation
+            FROM resumes r
+            JOIN workers = ON r.worker_id = w.id) helper1
+        )
+        SELECT * FROM helper2
+        ORDER BY compensation_diff DESC;
+        """
+        with sync_session_factory() as session:
+            r = aliased(ResumesOrm) # создание псевдонима
+            w = aliased(WorkersOrm) # создание псевдонима
+            # создаем подзапрос, получаем все записи таблицы resumes, workers и среднее значение по workload для каждой записи и приводим их к int
+            subq = (
+                select(
+                    r,
+                    w,
+                    w.id.label("worker_id"),
+                    func.avg(r.compensation).over(partition_by=r.workload).cast(Integer).label("avg_workload_compensation")
+                )
+                .join(r , r.worker_id == w.id) # чтобы сделать JOIN
+                # .join(full=True) # чтобы сделать FULL JOIN
+                # .join(isouter=True) # чтобы сделать LEFT JOIN
+                .subquery('helper1') # называем наш подзапрос, т.е. алиас
+            )
+            # создаем общий запрос, получаем все записи подзапроса + разницу поля compensation и avg_workload_compensation
+            cte = (
+                select(
+                    subq.c.worker_id,
+                    subq.c.username,
+                    subq.c.compensation,
+                    subq.c.workload,
+                    subq.c.avg_workload_compensation,
+                    (subq.c.compensation - subq.c.avg_workload_compensation).label("compensation_diff"),
+                )
+                .cte("helper2")
+            )
+            # сортируем записи
+            query = (
+                select(cte)
+                .order_by(cte.c.compensation_diff.desc())
+            )
+
+            res = session.execute(query)
+            result = res.all()
+            print(f'{result=}')
